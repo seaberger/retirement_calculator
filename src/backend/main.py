@@ -287,18 +287,20 @@ def default_scenario() -> Scenario:
         current_age=45,
         end_age=90,
         accounts=[
-            Account(kind="401k", balance=500_000, stocks=0.7, bonds=0.3),
-            Account(kind="Taxable", balance=250_000, stocks=0.6, bonds=0.3, cash=0.1),
-            Account(kind="IRA", balance=150_000, stocks=0.6, bonds=0.4),
+            Account(kind="401k", balance=800_000, stocks=0.7, bonds=0.3),
+            Account(kind="Taxable", balance=400_000, stocks=0.6, bonds=0.3, cash=0.1),
+            Account(kind="IRA", balance=300_000, stocks=0.6, bonds=0.4),
         ],
+        consulting=ConsultingLadder(start_age=45, years=10, start_amount=100_000, growth=0.02),
+        spending=Spending(base_annual=80_000, reduced_annual=60_000, reduce_at_age=65, inflation=0.025),
         incomes=[
-            IncomeStream(start_age=67, end_age=90, monthly=2500, cola=0.02), # Social Security
-            IncomeStream(start_age=67, end_age=90, monthly=1500, cola=0.02), # Spouse Social Security
+            IncomeStream(start_age=67, end_age=90, monthly=3000, cola=0.02), # Social Security
+            IncomeStream(start_age=67, end_age=90, monthly=2000, cola=0.02), # Spouse Social Security
         ],
         lumps=[
-            LumpEvent(age=65, amount=100_000, description="Inheritance"),
+            LumpEvent(age=65, amount=200_000, description="Home downsizing"),
         ],
-        toys=[ToyPurchase(age=65, amount=50_000, description="Dream vacation")],
+        toys=[ToyPurchase(age=65, amount=30_000, description="Dream vacation")],
     )
     return sc
 

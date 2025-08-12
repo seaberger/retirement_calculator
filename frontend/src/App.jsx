@@ -386,8 +386,9 @@ export default function App() {
                         <input 
                           type="number" 
                           className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={scenario.current_age}
-                          onChange={e => setScenario({...scenario, current_age: +e.target.value})}
+                          value={scenario.current_age || ''}
+                          onFocus={(e) => e.target.select()}
+                          onChange={e => setScenario({...scenario, current_age: e.target.value === '' ? 0 : +e.target.value})}
                         />
                         <span className="text-gray-500">years</span>
                       </div>
@@ -398,96 +399,165 @@ export default function App() {
                         <input 
                           type="number" 
                           className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={scenario.end_age}
-                          onChange={e => setScenario({...scenario, end_age: +e.target.value})}
+                          value={scenario.end_age || ''}
+                          onFocus={(e) => e.target.select()}
+                          onChange={e => setScenario({...scenario, end_age: e.target.value === '' ? 0 : +e.target.value})}
                         />
                         <span className="text-gray-500">years</span>
                       </div>
                     </div>
                   </div>
+                  
+                  <div className="mt-6">
+                    <div className="mb-4">
+                      <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                        <button
+                          onClick={() => setScenario({
+                            ...scenario, 
+                            is_retired: true,
+                            consulting: {...scenario.consulting, start_amount: 0, years: 0}
+                          })}
+                          className={`flex-1 px-4 py-2.5 font-medium transition-colors ${
+                            scenario.is_retired 
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          I'm retired
+                        </button>
+                        <button
+                          onClick={() => setScenario({
+                            ...scenario, 
+                            is_retired: false,
+                            consulting: {...scenario.consulting, start_amount: 100000, years: 10}
+                          })}
+                          className={`flex-1 px-4 py-2.5 font-medium transition-colors ${
+                            !scenario.is_retired 
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          I'm not retired
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {!scenario.is_retired && (
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">Retirement Age</label>
+                        <div className="flex items-center gap-2 max-w-xs">
+                          <input 
+                            type="number" 
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={scenario.retirement_age || scenario.consulting.start_age + scenario.consulting.years || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => {
+                              const retAge = e.target.value === '' ? 55 : +e.target.value;
+                              setScenario({
+                                ...scenario, 
+                                retirement_age: retAge,
+                                consulting: {
+                                  ...scenario.consulting, 
+                                  years: Math.max(0, retAge - scenario.consulting.start_age)
+                                }
+                              });
+                            }}
+                          />
+                          <span className="text-gray-500">years</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Regular Income</h3>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">Annual Income</label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-500">$</span>
-                        <input 
-                          type="number" 
-                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={0}
-                          onChange={() => {}}
-                        />
-                        <span className="text-gray-500">/ yr</span>
+                {!scenario.is_retired && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Regular Income</h3>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">Annual Income</label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">$</span>
+                          <input 
+                            type="number" 
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={scenario.consulting.start_amount || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => setScenario({...scenario, consulting: {...scenario.consulting, start_amount: e.target.value === '' ? 0 : +e.target.value}})}
+                          />
+                          <span className="text-gray-500">/ yr</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Gross annual income (before taxes)</p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Gross annual income (before taxes)</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-2">Growth</label>
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="number" 
-                          step="0.1"
-                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={scenario.consulting.growth * 100}
-                          onChange={e => setScenario({...scenario, consulting: {...scenario.consulting, growth: +e.target.value / 100}})}
-                        />
-                        <span className="text-gray-500">%</span>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">Growth</label>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="number" 
+                            step="0.1"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={scenario.consulting.growth * 100 || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => setScenario({...scenario, consulting: {...scenario.consulting, growth: e.target.value === '' ? 0 : +e.target.value / 100}})}
+                          />
+                          <span className="text-gray-500">%</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Retirement Income</h3>
                   
                   {scenario.incomes.map((income, idx) => (
                     <div key={idx} className="mb-6 p-4 border border-gray-200 rounded-lg">
-                      <div className="grid grid-cols-4 gap-4">
-                        <div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="min-w-0">
                           <label className="block text-sm text-gray-600 mb-2">Monthly Amount</label>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-500">$</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500 flex-shrink-0">$</span>
                             <input 
                               type="number" 
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={income.monthly}
-                              onChange={e => updateIncome(idx, {monthly: +e.target.value})}
+                              className="w-full min-w-0 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={income.monthly || ''}
+                              onFocus={(e) => e.target.select()}
+                              onChange={e => updateIncome(idx, {monthly: e.target.value === '' ? 0 : +e.target.value})}
                             />
-                            <span className="text-gray-500">/ mo</span>
                           </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <label className="block text-sm text-gray-600 mb-2">Start Age</label>
                           <input 
                             type="number" 
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={income.start_age}
-                            onChange={e => updateIncome(idx, {start_age: +e.target.value})}
+                            value={income.start_age || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => updateIncome(idx, {start_age: e.target.value === '' ? 0 : +e.target.value})}
                           />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <label className="block text-sm text-gray-600 mb-2">End Age</label>
                           <input 
                             type="number" 
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={income.end_age}
-                            onChange={e => updateIncome(idx, {end_age: +e.target.value})}
+                            value={income.end_age || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={e => updateIncome(idx, {end_age: e.target.value === '' ? 0 : +e.target.value})}
                           />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <label className="block text-sm text-gray-600 mb-2">Growth</label>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             <input 
                               type="number" 
                               step="0.1"
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={income.cola * 100}
-                              onChange={e => updateIncome(idx, {cola: +e.target.value / 100})}
+                              className="w-full min-w-0 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={income.cola * 100 || ''}
+                              onFocus={(e) => e.target.select()}
+                              onChange={e => updateIncome(idx, {cola: e.target.value === '' ? 0 : +e.target.value / 100})}
                             />
-                            <span className="text-gray-500">%</span>
+                            <span className="text-gray-500 flex-shrink-0">%</span>
                           </div>
                         </div>
                       </div>

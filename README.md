@@ -41,13 +41,32 @@ npm run dev
 ```
 Frontend runs on http://localhost:5173 by default and connects to backend at http://localhost:8020.
 
+## Screenshots
+
+### Personal Information Tab
+![Personal Info Tab](screenshots/personal-tab.png)
+*Configure your age, retirement status, and income projections. Features include:*
+- Retirement toggle (I'm retired / I'm not retired)
+- Dynamic retirement age field for pre-retirees
+- Regular income with growth projections
+- Multiple retirement income streams (Social Security, pensions, etc.)
+
+### Simulation Results
+![Simulation Results](screenshots/results-view.png)
+*View Monte Carlo simulation results with:*
+- Portfolio balance projection chart showing median and confidence bands
+- Lucky (80th percentile) vs Unlucky (20th percentile) scenarios
+- Detailed age-by-age breakdown table
+- Market return analysis across percentiles
+- Success probability metrics
+
 ## Usage
 1. Start backend and frontend.
 2. Open frontend in your browser.
 3. Adjust inputs: accounts, incomes, lump sums, consulting ladder, toy purchases.
-4. Click **Run 10,000 sims** to generate projections.
+4. Click **Show Me** to generate projections.
 5. View median, 20th, and 80th percentile paths with band chart.
-6. Save scenarios to SQLite for later.
+6. Save/Load scenarios using the buttons in the Personal tab.
 
 ## File Structure
 ```
