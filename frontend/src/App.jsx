@@ -388,7 +388,17 @@ export default function App() {
                           className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={scenario.current_age || ''}
                           onFocus={(e) => e.target.select()}
-                          onChange={e => setScenario({...scenario, current_age: e.target.value === '' ? 0 : +e.target.value})}
+                          onChange={e => {
+                            const newAge = e.target.value === '' ? 0 : +e.target.value;
+                            setScenario({
+                              ...scenario, 
+                              current_age: newAge,
+                              consulting: {
+                                ...scenario.consulting,
+                                start_age: newAge + 1
+                              }
+                            });
+                          }}
                         />
                         <span className="text-gray-500">years</span>
                       </div>
@@ -429,7 +439,12 @@ export default function App() {
                           onClick={() => setScenario({
                             ...scenario, 
                             is_retired: false,
-                            consulting: {...scenario.consulting, start_amount: 100000, years: 10}
+                            consulting: {
+                              ...scenario.consulting, 
+                              start_age: scenario.current_age + 1,
+                              start_amount: 100000, 
+                              years: 10
+                            }
                           })}
                           className={`flex-1 px-4 py-2.5 font-medium transition-colors ${
                             !scenario.is_retired 
@@ -457,8 +472,9 @@ export default function App() {
                                 ...scenario, 
                                 retirement_age: retAge,
                                 consulting: {
-                                  ...scenario.consulting, 
-                                  years: Math.max(0, retAge - scenario.consulting.start_age)
+                                  ...scenario.consulting,
+                                  start_age: scenario.current_age + 1,
+                                  years: Math.max(0, retAge - (scenario.current_age + 1))
                                 }
                               });
                             }}
@@ -512,6 +528,15 @@ export default function App() {
                   
                   {scenario.incomes.map((income, idx) => (
                     <div key={idx} className="mb-6 p-4 border border-gray-200 rounded-lg">
+                      <div className="mb-3">
+                        <input 
+                          type="text" 
+                          placeholder="Income source (e.g., Social Security, Consulting, Pension)"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          value={income.description || ''}
+                          onChange={e => updateIncome(idx, {description: e.target.value})}
+                        />
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="min-w-0">
                           <label className="block text-sm text-gray-600 mb-2">Monthly Amount</label>
@@ -719,7 +744,7 @@ export default function App() {
                   <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Regular Distributions</h3>
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm text-gray-600 mb-2">Retirement Living Expenses</label>
+                      <label className="block text-sm text-gray-600 mb-2">Initial Living Expenses</label>
                       <div className="flex items-center gap-2">
                         <span className="text-gray-500">$</span>
                         <input 
@@ -730,7 +755,36 @@ export default function App() {
                         />
                         <span className="text-gray-500">/ mo</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Monthly living expenses in retirement</p>
+                      <p className="text-xs text-gray-500 mt-1">Monthly expenses from now until age {scenario.spending.reduce_at_age || 65}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">Reduced Living Expenses</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">$</span>
+                        <input 
+                          type="number" 
+                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={(scenario.spending.reduced_annual || scenario.spending.base_annual * 0.7) / 12}
+                          onChange={e => setScenario({...scenario, spending: {...scenario.spending, reduced_annual: +e.target.value * 12}})}
+                        />
+                        <span className="text-gray-500">/ mo</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Monthly expenses from age {scenario.spending.reduce_at_age || 65} onward</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6 mt-6">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">Reduce Expenses at Age</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={scenario.spending.reduce_at_age || 65}
+                          onChange={e => setScenario({...scenario, spending: {...scenario.spending, reduce_at_age: +e.target.value}})}
+                        />
+                        <span className="text-gray-500">years</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Age when spending reduces</p>
                     </div>
                     <div>
                       <label className="block text-sm text-gray-600 mb-2">Inflation</label>
@@ -744,7 +798,7 @@ export default function App() {
                         />
                         <span className="text-gray-500">%</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">Annual</p>
+                      <p className="text-xs text-gray-500 mt-1">Annual inflation rate</p>
                     </div>
                   </div>
                 </div>
@@ -922,6 +976,196 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Fat Tails Configuration */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">FAT TAILS</h4>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Markets in real life are more volatile than indicated by statistical models traditionally 
+                      used to simulate investment performance (e.g., the normal bell curve). By default, our 
+                      model fattens the tails of the probability distribution to more realistically replicate 
+                      market volatility. <strong>We strongly suggest that you keep Fat Tails switched on.</strong>
+                    </p>
+                    
+                    <div className="mb-4">
+                      <label className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 text-blue-600 rounded"
+                          checked={scenario.cma.fat_tails}
+                          onChange={e => setScenario({
+                            ...scenario, 
+                            cma: {...scenario.cma, fat_tails: e.target.checked}
+                          })}
+                        />
+                        <span className="text-sm font-medium">Include Fat Tails</span>
+                      </label>
+                    </div>
+
+                    {scenario.cma.fat_tails && (
+                      <div className="space-y-4 mt-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <label className="block text-sm text-gray-600 mb-2">Tail Event Settings</label>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-xs text-gray-500 mb-2">Magnitude</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setScenario({
+                                      ...scenario, 
+                                      cma: {...scenario.cma, t_df: 8}
+                                    })}
+                                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.t_df === 8 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Standard
+                                  </button>
+                                  <button
+                                    onClick={() => setScenario({
+                                      ...scenario, 
+                                      cma: {...scenario.cma, t_df: 5}
+                                    })}
+                                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.t_df === 5 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Extreme
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const value = prompt('Enter custom degrees of freedom (3-20, lower = more extreme):', scenario.cma.t_df);
+                                      if (value && !isNaN(value)) {
+                                        setScenario({
+                                          ...scenario,
+                                          cma: {...scenario.cma, t_df: Math.min(20, Math.max(3, parseInt(value)))}
+                                        });
+                                      }
+                                    }}
+                                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.t_df !== 5 && scenario.cma.t_df !== 8
+                                        ? 'bg-gray-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Custom ({scenario.cma.t_df})
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="text-xs text-gray-500 mb-2">Frequency</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => setScenario({
+                                      ...scenario, 
+                                      cma: {...scenario.cma, tail_prob: 0.025}
+                                    })}
+                                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.tail_prob === 0.025 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Standard
+                                  </button>
+                                  <button
+                                    onClick={() => setScenario({
+                                      ...scenario, 
+                                      cma: {...scenario.cma, tail_prob: 0.05}
+                                    })}
+                                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.tail_prob === 0.05 
+                                        ? 'bg-blue-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Extreme
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const value = prompt('Enter annual probability % (1-15):', (scenario.cma.tail_prob * 100).toFixed(0));
+                                      if (value && !isNaN(value)) {
+                                        setScenario({
+                                          ...scenario,
+                                          cma: {...scenario.cma, tail_prob: Math.min(0.15, Math.max(0.01, parseFloat(value) / 100))}
+                                        });
+                                      }
+                                    }}
+                                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                      scenario.cma.tail_prob !== 0.025 && scenario.cma.tail_prob !== 0.05
+                                        ? 'bg-gray-600 text-white' 
+                                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    Custom ({(scenario.cma.tail_prob * 100).toFixed(0)}%)
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => alert(`FAT TAIL SETTINGS EXPLAINED:\n\nMagnitude of Tail Events:\n• Standard (df=8): Tail event magnitude consistent with historical precedent in U.S. markets\n• Extreme (df=5): Tail event magnitude exceeds historical precedent in U.S. markets\n• Custom: Degrees of freedom control tail heaviness (lower = heavier tails)\n\nFrequency of Tail Events:\n• Standard (2.5%): Tail event frequency consistent with historical precedent in U.S. markets\n• Extreme (5%): Tail event frequency doubled relative to historical precedent\n• Custom: Annual probability percentage\n\nSkewness of Tail Events:\n• Negative: Most tail events are losses (left tail occurrences)\n• Neutral: Tail event distribution approximates historical precedent\n• Positive: Most tail events are gains (right tail occurrences)\n\nThese settings use a Student's t distribution to model excess kurtosis observed in real markets, making extreme events more likely than normal distributions predict.`)}
+                            className="ml-3 mt-6 w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold text-sm"
+                          >
+                            ?
+                          </button>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-2">Skewness of tail events</label>
+                          <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                            <button
+                              onClick={() => setScenario({
+                                ...scenario, 
+                                cma: {...scenario.cma, tail_boost: 1.3}
+                              })}
+                              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                                scenario.cma.tail_boost > 1.3 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              Negative
+                            </button>
+                            <button
+                              onClick={() => setScenario({
+                                ...scenario, 
+                                cma: {...scenario.cma, tail_boost: 1.0}
+                              })}
+                              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                                scenario.cma.tail_boost >= 0.8 && scenario.cma.tail_boost <= 1.2 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              Neutral
+                            </button>
+                            <button
+                              onClick={() => setScenario({
+                                ...scenario, 
+                                cma: {...scenario.cma, tail_boost: 0.7}
+                              })}
+                              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                                scenario.cma.tail_boost < 0.7 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              Positive
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Controls whether crashes are more likely than booms</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-6 gap-4 text-center">
                     <div></div>
                     <div className="text-sm font-medium text-gray-700">Stocks</div>
@@ -990,65 +1234,6 @@ export default function App() {
                   >
                     Restore Defaults
                   </button>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Fat Tails</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Markets in real life are more volatile than indicated by statistical models traditionally used to simulate investment performance (e.g., the normal bell curve). 
-                    By default, our model fattens the tails of the probability distribution to more realistically replicate market volatility. 
-                    <span className="italic font-medium"> We strongly suggest that you keep Fat Tails switched on.</span>
-                  </p>
-                  
-                  <label className="flex items-center gap-3 mb-6">
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 text-blue-600 rounded"
-                      checked={scenario.cma.fat_tails}
-                      onChange={e => setScenario({...scenario, cma: {...scenario.cma, fat_tails: e.target.checked}})}
-                    />
-                    <span className="text-sm font-medium">Include Fat Tails</span>
-                  </label>
-
-                  {scenario.cma.fat_tails && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">Magnitude of tail events</label>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setScenario({...scenario, cma: {...scenario.cma, tail_boost: 0.08}})}
-                            className={`flex-1 px-4 py-2 rounded-lg border-2 ${scenario.cma.tail_boost === 0.08 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                          >
-                            Standard
-                          </button>
-                          <button 
-                            onClick={() => setScenario({...scenario, cma: {...scenario.cma, tail_boost: 0.16}})}
-                            className={`flex-1 px-4 py-2 rounded-lg border-2 ${scenario.cma.tail_boost === 0.16 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                          >
-                            Extreme
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">Frequency of tail events</label>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setScenario({...scenario, cma: {...scenario.cma, tail_prob: 0.06}})}
-                            className={`flex-1 px-4 py-2 rounded-lg border-2 ${scenario.cma.tail_prob === 0.06 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                          >
-                            Standard
-                          </button>
-                          <button 
-                            onClick={() => setScenario({...scenario, cma: {...scenario.cma, tail_prob: 0.12}})}
-                            className={`flex-1 px-4 py-2 rounded-lg border-2 ${scenario.cma.tail_prob === 0.12 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-                          >
-                            High
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
