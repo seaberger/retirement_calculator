@@ -246,7 +246,17 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[70, 75, 80, 85, 90].map(age => {
+                  {(() => {
+                    // Calculate the first 5-year multiple after current age
+                    const startAge = Math.ceil((scenario.current_age + 1) / 5) * 5;
+                    const endAge = Math.min(scenario.end_age, 100);
+                    const ages = [];
+                    for (let age = startAge; age <= endAge; age += 5) {
+                      ages.push(age);
+                    }
+                    // Limit to showing maximum 6 rows for readability
+                    return ages.slice(0, 6);
+                  })().map(age => {
                     const idx = result.ages.indexOf(age);
                     if (idx === -1) return null;
                     
