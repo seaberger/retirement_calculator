@@ -28,7 +28,7 @@ class Engine:
         Args:
             scenario: The retirement scenario to simulate
             fat_tail_engine: Which fat-tail implementation to use 
-                           ("optionB", "research", or "current")
+                           ("kou_logsafe", "research", or "current")
         """
         self.sc = scenario
         self.horizon = scenario.end_age - scenario.current_age
@@ -63,8 +63,8 @@ class Engine:
                 skew = "neutral"
             
             # Select fat-tail engine
-            if self.fat_tail_engine == "optionB":
-                from .fat_tails_optionB import draw_fat_tailed_returns_optionB, FatTailCfg
+            if self.fat_tail_engine == "kou_logsafe":
+                from .fat_tails_kou_logsafe import draw_fat_tailed_returns_kou_logsafe, FatTailCfg
                 cfg = FatTailCfg(
                     enabled=True,
                     t_df=self.sc.cma.t_df,
@@ -72,7 +72,7 @@ class Engine:
                     tail_frequency=frequency,
                     tail_skew=skew
                 )
-                return draw_fat_tailed_returns_optionB(
+                return draw_fat_tailed_returns_kou_logsafe(
                     mu_arith=self.mu,
                     cov_arith=self.cov,
                     assets=ASSETS,

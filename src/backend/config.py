@@ -25,7 +25,7 @@ MAX_SIMULATIONS = 100000
 
 # Fat-tail engine selection
 # Options: "optionB" (log-safe), "research" (arithmetic), "current" (existing)
-DEFAULT_FAT_TAIL_ENGINE = "optionB"
+DEFAULT_FAT_TAIL_ENGINE = "kou_logsafe"  # Winner! Achieves target 2-5% impact
 
 # Performance settings
 USE_PARALLEL_PROCESSING = False  # Set to True if using multiprocessing
