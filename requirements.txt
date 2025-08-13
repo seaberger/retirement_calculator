@@ -3,3 +3,7 @@ uvicorn
 numpy
 pydantic
 SQLAlchemy
+tabulate
+scipy
+pytest
+pytest-cov

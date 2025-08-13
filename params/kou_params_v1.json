@@ -1,0 +1,104 @@
+{
+  "version": "1.0.0",
+  "date": "2025-08-13",
+  "description": "Production parameters for Kou Log-Safe fat-tail algorithm, optimized via fractional factorial design",
+  "optimization": {
+    "method": "fractional_factorial",
+    "n_tests": 238,
+    "n_simulations": 1190000,
+    "target_impacts": {
+      "standard": [-0.05, -0.02],
+      "extreme": [-0.08, -0.04],
+      "high_frequency": [-0.06, -0.03],
+      "negative_skew": [-0.07, -0.03]
+    },
+    "achieved_impacts": {
+      "standard": -0.029,
+      "extreme": -0.045,
+      "high_frequency": -0.039,
+      "negative_skew": -0.033
+    }
+  },
+  "parameters": {
+    "standard": {
+      "t_df": 6.0,
+      "market": {
+        "lam": 0.25,
+        "p_pos": 0.40,
+        "eta_pos": 0.055,
+        "eta_neg": 0.075,
+        "bond_beta": 0.10
+      },
+      "stocks": {
+        "lam": 0.20,
+        "p_pos": 0.40,
+        "eta_pos": 0.030,
+        "eta_neg": 0.075
+      },
+      "bonds": {
+        "lam": 0.03,
+        "p_pos": 0.50,
+        "eta_pos": 0.006,
+        "eta_neg": 0.012
+      },
+      "crypto": {
+        "lam": 0.90,
+        "p_pos": 0.45,
+        "eta_pos": 0.140,
+        "eta_neg": 0.170
+      }
+    },
+    "toggles": {
+      "extreme_magnitude_multiplier": 1.30,
+      "high_frequency_multiplier": 1.50,
+      "high_frequency_eta_neg_boost": 1.10,
+      "negative_skew_p_pos_shift": -0.05,
+      "negative_skew_eta_neg_scale": 1.10,
+      "positive_skew_eta_scale": 0.95
+    },
+    "floors": {
+      "standard": {
+        "stocks": -0.60,
+        "bonds": -0.25,
+        "crypto": -0.85,
+        "cds": -0.05,
+        "cash": -0.02
+      },
+      "extreme": {
+        "stocks": -0.70,
+        "bonds": -0.25,
+        "crypto": -0.85,
+        "cds": -0.05,
+        "cash": -0.02
+      }
+    },
+    "coordination": {
+      "black_swan_eta_neg_limit": 0.070,
+      "max_idio_jumps_per_year": 1,
+      "sequence_risk_boost": 1.1,
+      "early_retirement_years": 10
+    }
+  },
+  "validation": {
+    "annual_distribution_targets": {
+      "mean": [0.075, 0.090],
+      "std": [0.15, 0.20],
+      "skew": [-0.7, -0.3],
+      "excess_kurtosis": [3.0, 7.0],
+      "p05": [-0.28, -0.22],
+      "p01": [-0.45, -0.35],
+      "es05": [-0.36, -0.30]
+    },
+    "ci_guardrails": {
+      "standard_impact": [-0.055, -0.015],
+      "flag_on_violation": true,
+      "check_frequency": "weekly"
+    }
+  },
+  "notes": [
+    "Parameters optimized for 60/40 portfolio with $1.5M initial, $60K spending",
+    "Black Swan coordination reduces market eta_neg to 0.070 when active",
+    "Sequence risk boost optional, applies 1.1x to market lambda in early years",
+    "All parameters tested to ensure <-100% returns are impossible"
+  ]
+}
