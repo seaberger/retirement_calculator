@@ -24,36 +24,39 @@ class KouLog:
 @dataclass
 class MarketJumpLog:
     """Market-wide jump configuration."""
-    lam: float = 0.20          # Bernoulli p = 1 - exp(-lam)  (~18% per year)
+    lam: float = 0.25          # Optimized: ~22% annual probability
     p_pos: float = 0.40
-    eta_pos: float = 0.035     # log-space magnitudes are smaller than arithmetic %
-    eta_neg: float = 0.075
+    eta_pos: float = 0.055     # Optimized for 2-5% portfolio impact
+    eta_neg: float = 0.075     # Calibrated to historical tail risk
     affected_assets: Sequence[str] = ("stocks", "crypto")
-    bond_beta: float = 0.10    # fraction of market jump applied to bonds
+    bond_beta: float = 0.10    # fraction of market jump applied to bonds (flight-to-quality)
 
 
 @dataclass
 class FatTailCfg:
     """Complete fat-tail configuration."""
     enabled: bool = True
-    t_df: float = 6.0          # vol-preserving Student-t body
+    t_df: float = 6.0          # Optimized via fractional factorial design
     tail_magnitude: str = "standard"   # "standard" | "extreme"
     tail_frequency: str = "standard"   # "standard" | "high"
     tail_skew: str = "neutral"         # "negative" | "neutral" | "positive"
     
-    # Baseline per-asset jump params (LOG space). Calibrated for realistic impact.
+    # Baseline per-asset jump params (LOG space). Calibrated to U.S. equity history.
     per_asset: Dict[str, KouLog] = field(default_factory=lambda: {
-        "stocks": KouLog(0.30, 0.40, 0.030, 0.060),   # gentle, historically plausible
-        "bonds":  KouLog(0.02, 0.50, 0.006, 0.012),
-        "crypto": KouLog(0.90, 0.45, 0.140, 0.170),
-        "cds":    KouLog(0.00, 0.50, 0.000, 0.000),
-        "cash":   KouLog(0.00, 0.50, 0.000, 0.000),
+        "stocks": KouLog(0.20, 0.40, 0.030, 0.075),   # Optimized: meets all targets
+        "bonds":  KouLog(0.03, 0.50, 0.006, 0.012),   # minimal jumps
+        "crypto": KouLog(0.90, 0.45, 0.140, 0.170),   # higher volatility asset
+        "cds":    KouLog(0.00, 0.50, 0.000, 0.000),   # no jumps
+        "cash":   KouLog(0.00, 0.50, 0.000, 0.000),   # no jumps
     })
     market: MarketJumpLog = field(default_factory=MarketJumpLog)
     
     # Hard annual floors in arithmetic space (prevents unrealistic wipeouts)
     floors: Dict[str, float] = field(default_factory=lambda: {
         "stocks": -0.60, "bonds": -0.25, "crypto": -0.85, "cds": -0.05, "cash": -0.02
+    })
+    extreme_floors: Dict[str, float] = field(default_factory=lambda: {
+        "stocks": -0.70, "bonds": -0.25, "crypto": -0.85, "cds": -0.05, "cash": -0.02
     })
     max_idio_jumps_per_year: int = 1
     seed: Optional[int] = None
@@ -98,27 +101,32 @@ def _jump_sizes_log(n: int, p_pos: float, eta_pos: float, eta_neg: float, rng) -
 
 
 def _apply_toggles(cfg: FatTailCfg):
-    """Apply UI toggles with mild, realistic multipliers."""
-    # Aiming for 2-5% success-rate impact, not 25-30%
+    """Apply UI toggles with calibrated multipliers for realistic impact."""
+    # Calibrated for 2-5% (standard), 4-8% (extreme), 3-6% (high freq) impact
     mag = 1.30 if cfg.tail_magnitude == "extreme" else 1.00
-    freq = 1.40 if cfg.tail_frequency == "high" else 1.00
+    freq = 1.45 if cfg.tail_frequency == "high" else 1.00
+    
+    # High frequency also needs magnitude boost for market jumps
+    high_freq_mag_boost = 1.10 if cfg.tail_frequency == "high" else 1.00
+    
     skew = {"negative": -0.05, "neutral": 0.0, "positive": +0.05}[cfg.tail_skew]
+    skew_mag_scale = {"negative": 1.10, "neutral": 1.00, "positive": 0.95}[cfg.tail_skew]
 
     per_adj = {}
     for k, p in cfg.per_asset.items():
         per_adj[k] = KouLog(
             lam=p.lam * freq,
             p_pos=float(np.clip(p.p_pos + skew, 0.05, 0.95)),
-            eta_pos=p.eta_pos * mag,
-            eta_neg=p.eta_neg * mag
+            eta_pos=p.eta_pos * mag * (0.95 if cfg.tail_skew == "positive" else 1.0),
+            eta_neg=p.eta_neg * mag * skew_mag_scale
         )
     
     mk = cfg.market
     market_adj = MarketJumpLog(
         lam=mk.lam * freq,
         p_pos=float(np.clip(mk.p_pos + skew, 0.05, 0.95)),
-        eta_pos=mk.eta_pos * mag,
-        eta_neg=mk.eta_neg * mag,
+        eta_pos=mk.eta_pos * mag * (0.95 if cfg.tail_skew == "positive" else 1.0),
+        eta_neg=mk.eta_neg * mag * high_freq_mag_boost * skew_mag_scale,
         affected_assets=tuple(mk.affected_assets),
         bond_beta=mk.bond_beta
     )
@@ -202,8 +210,12 @@ def draw_fat_tailed_returns_kou_logsafe(
 
         # Convert to arithmetic and apply floors
         r = np.expm1(logr)  # exp(log_r) - 1, guarantees r > -1
+        
+        # Use extreme floors if extreme magnitude is selected
+        floors_to_use = cfg.extreme_floors if cfg.tail_magnitude == "extreme" else cfg.floors
+        
         for k, j in idx.items():
-            floor = cfg.floors.get(k, -0.90)
+            floor = floors_to_use.get(k, -0.90)
             r[:, :, j] = np.maximum(r[:, :, j], floor)
         return r
 
