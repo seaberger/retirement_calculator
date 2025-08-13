@@ -41,6 +41,13 @@ class FatTailCfg:
     tail_frequency: str = "standard"   # "standard" | "high"
     tail_skew: str = "neutral"         # "negative" | "neutral" | "positive"
     
+    # Coordination with Black Swan feature
+    black_swan_active: bool = False  # Set True when Black Swan is enabled
+    
+    # Sequence risk enhancement (optional)
+    early_retirement_years: int = 10  # Years to apply sequence risk boost
+    sequence_risk_boost: float = 1.1  # Multiplier for early years (1.0 = disabled)
+    
     # Baseline per-asset jump params (LOG space). Calibrated to U.S. equity history.
     per_asset: Dict[str, KouLog] = field(default_factory=lambda: {
         "stocks": KouLog(0.20, 0.40, 0.030, 0.075),   # Optimized: meets all targets
@@ -104,7 +111,7 @@ def _apply_toggles(cfg: FatTailCfg):
     """Apply UI toggles with calibrated multipliers for realistic impact."""
     # Calibrated for 2-5% (standard), 4-8% (extreme), 3-6% (high freq) impact
     mag = 1.30 if cfg.tail_magnitude == "extreme" else 1.00
-    freq = 1.45 if cfg.tail_frequency == "high" else 1.00
+    freq = 1.50 if cfg.tail_frequency == "high" else 1.00  # Updated to 1.5x per recommendation
     
     # High frequency also needs magnitude boost for market jumps
     high_freq_mag_boost = 1.10 if cfg.tail_frequency == "high" else 1.00
@@ -122,11 +129,17 @@ def _apply_toggles(cfg: FatTailCfg):
         )
     
     mk = cfg.market
+    
+    # Adjust market eta_neg if Black Swan is active to avoid double-counting
+    market_eta_neg_base = mk.eta_neg
+    if cfg.black_swan_active:
+        market_eta_neg_base = min(mk.eta_neg, 0.070)  # Reduce to 0.070 when Black Swan ON
+    
     market_adj = MarketJumpLog(
         lam=mk.lam * freq,
         p_pos=float(np.clip(mk.p_pos + skew, 0.05, 0.95)),
         eta_pos=mk.eta_pos * mag * (0.95 if cfg.tail_skew == "positive" else 1.0),
-        eta_neg=mk.eta_neg * mag * high_freq_mag_boost * skew_mag_scale,
+        eta_neg=market_eta_neg_base * mag * high_freq_mag_boost * skew_mag_scale,
         affected_assets=tuple(mk.affected_assets),
         bond_beta=mk.bond_beta
     )
@@ -173,15 +186,30 @@ def draw_fat_tailed_returns_kou_logsafe(
     aff_idx = [idx[a] for a in market_adj.affected_assets if a in idx]
     bonds_i = idx.get("bonds")
 
-    def _simulate_block(Y, S, mu_log_local):
+    def _simulate_block(Y, S, mu_log_local, year_offset=0):
         """Simulate returns for Y years and S scenarios."""
         body = _t_shocks_log(Y, S, chol_log, df, rng)
         logr = mu_log_local + body
 
         # Market co-jump: at most 1 per year (Bernoulli)
         if market_adj.lam > 0:
-            p_event = 1.0 - np.exp(-market_adj.lam)  # ≈ lam for small lam
-            M = rng.random((Y, S)) < p_event
+            # Apply sequence risk boost for early retirement years
+            lam_effective = market_adj.lam
+            if cfg.sequence_risk_boost > 1.0:
+                for y in range(Y):
+                    if year_offset + y < cfg.early_retirement_years:
+                        # Use year-specific boosted lambda
+                        pass  # Will handle per-year below
+            
+            # Generate market jumps with potential sequence risk adjustment
+            M = np.zeros((Y, S), dtype=bool)
+            for y in range(Y):
+                year_lam = market_adj.lam
+                if cfg.sequence_risk_boost > 1.0 and (year_offset + y) < cfg.early_retirement_years:
+                    year_lam *= cfg.sequence_risk_boost
+                    year_lam = min(year_lam, 0.35)  # Cap at reasonable level
+                p_event = 1.0 - np.exp(-year_lam)
+                M[y, :] = rng.random(S) < p_event
             n = int(M.sum())
             if n > 0:
                 m_sizes = _jump_sizes_log(n, market_adj.p_pos, 
@@ -226,4 +254,4 @@ def draw_fat_tailed_returns_kou_logsafe(
         delta = np.log1p(mu_arith) - np.log1p(np.clip(m_sim, -0.95, 5.0))
         mu_log = mu_log + delta.reshape(1, 1, A)
 
-    return _simulate_block(n_years, n_sims, mu_log)
+    return _simulate_block(n_years, n_sims, mu_log, year_offset=0)
