@@ -1166,6 +1166,81 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* Black Swan Configuration */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">BLACK SWAN</h4>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Specify a sudden and extreme drop in portfolio value to assess the potential impact on 
+                      your retirement planning (e.g., "What if my portfolio drops in value by 25% at age 67?").
+                    </p>
+                    
+                    <div className="mb-4">
+                      <label className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 text-blue-600 rounded"
+                          checked={scenario.black_swan?.enabled || false}
+                          onChange={e => setScenario({
+                            ...scenario, 
+                            black_swan: {
+                              ...scenario.black_swan,
+                              enabled: e.target.checked,
+                              age: scenario.black_swan?.age || 67,
+                              portfolio_drop: scenario.black_swan?.portfolio_drop || 0.25
+                            }
+                          })}
+                        />
+                        <span className="text-sm font-medium">Include Black Swan event in simulation</span>
+                      </label>
+                    </div>
+
+                    {scenario.black_swan?.enabled && (
+                      <div className="grid grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-2">Age</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number"
+                              min={scenario.current_age}
+                              max={scenario.end_age}
+                              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={scenario.black_swan?.age || 67}
+                              onChange={e => setScenario({
+                                ...scenario,
+                                black_swan: {
+                                  ...scenario.black_swan,
+                                  age: +e.target.value
+                                }
+                              })}
+                            />
+                            <span className="text-gray-500">years</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-2">Portfolio Decrease</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="5"
+                              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={(scenario.black_swan?.portfolio_drop || 0.25) * 100}
+                              onChange={e => setScenario({
+                                ...scenario,
+                                black_swan: {
+                                  ...scenario.black_swan,
+                                  portfolio_drop: +e.target.value / 100
+                                }
+                              })}
+                            />
+                            <span className="text-gray-500">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-6 gap-4 text-center">
                     <div></div>
                     <div className="text-sm font-medium text-gray-700">Stocks</div>

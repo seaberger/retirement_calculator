@@ -64,6 +64,11 @@ class Account(BaseModel):
     cds: float = 0.0
     cash: float = 0.0
 
+class BlackSwanEvent(BaseModel):
+    enabled: bool = False
+    age: int = 67  # Age when the event occurs
+    portfolio_drop: float = 0.25  # Percentage drop (0.25 = 25% drop)
+
 class CapitalMarketAssumptions(BaseModel):
     # Expected returns and vols (nominal) — can be overridden in UI
     exp_ret: Dict[str, float] = Field(
@@ -82,11 +87,11 @@ class CapitalMarketAssumptions(BaseModel):
             "cash":   {"stocks": -0.2, "bonds": 0.2, "crypto": -0.1, "cds": 0.4,  "cash": 1.0},
         }
     )
-    # Fat tails config (based on research: 5-10 df is typical for financial returns)
+    # Fat tails config (research-calibrated: df 10-15 for subtle fat tails)
     fat_tails: bool = True
-    t_df: int = 8  # degrees of freedom for Student-t (8=standard magnitude, 5=extreme magnitude)
+    t_df: int = 12  # degrees of freedom for Student-t (12=subtle, 8=moderate, 6=strong)
     tail_boost: float = 1.0  # skewness: <1.0 negative, 1.0 neutral, >1.0 positive
-    tail_prob: float = 0.025   # 2.5% = standard frequency (matches historical U.S. markets)
+    tail_prob: float = 0.020   # 2.0% = standard frequency (not used currently)
 
 class Taxes(BaseModel):
     effective_rate: float = 0.20  # applied to taxable withdrawals and taxable income
@@ -111,6 +116,7 @@ class Scenario(BaseModel):
     incomes: List[IncomeStream] = Field(default_factory=list)
     lumps: List[LumpEvent] = Field(default_factory=list)
     toys: List[ToyPurchase] = Field(default_factory=list)
+    black_swan: BlackSwanEvent = BlackSwanEvent()
     sims: conint(ge=500, le=100000) = 10000
 
 # ============================
@@ -187,142 +193,106 @@ class Engine:
     def _draw_fat_tailed_returns(self, mu, chol, assets, n_years, n_sims, 
                                   t_df, tail_magnitude, tail_frequency, tail_skew):
         """
-        SAFE fat-tail generator using log-domain Student-t + Kou jumps
-        Prevents unrealistic wipeouts with proper safety rails
+        Calibrated fat-tail implementation (Option A - Hyperparameter tuning):
+        - Reduced magnitude: 2-5% extra volatility (not 8-12%)
+        - Reduced frequency: 10-15% annual probability (not per simulation)
+        - Gentle skew adjustments: ±5% (not ±10%)
+        - Mean correction to preserve expected returns
         """
         rng = np.random.default_rng(None)
         A = len(assets)
         
-        # Convert arithmetic parameters to log space for safer calculations
-        # Log drift approximation: mu_log ≈ ln(1 + mu_arith)
-        mu_log = np.log1p(mu)
+        # 1) Generate base returns using normal distribution
+        z = rng.standard_normal(size=(n_years, n_sims, A))
+        z_corr = z @ chol.T
         
-        # For log-domain covariance, we need to adjust the Cholesky
-        # Approximation: σ_log ≈ σ_arith for small volatilities
-        # More accurate: σ_log = sqrt(ln(1 + (σ_arith/1+μ)²))
-        # For simplicity, use the arithmetic Cholesky scaled down slightly
-        chol_log = chol * 0.95  # Slight reduction for log space
+        # Start with base returns (arithmetic)
+        rets = mu.reshape(1, 1, A) + z_corr
         
-        # 1) Diffusion body in log space with Student-t
-        df = t_df if t_df > 0 else 1e6
-        YS = n_years * n_sims
+        # 2) Add calibrated market stress events
+        # Historical: ~10% chance of >20% decline per year
+        # But we want subtle impact on multi-year simulations
         
-        # Draw Student-t samples with variance preservation
-        z = rng.standard_t(df, size=(YS, A))
-        if df > 2:
-            scale = np.sqrt((df - 2.0) / df)  # Scale to unit variance
-            z *= scale
+        if tail_frequency == "standard":
+            stress_prob = 0.10  # 10% annual chance (historical)
+        else:  # high frequency
+            stress_prob = 0.15  # 15% annual chance (1.5x historical, not 2x)
         
-        # Correlate and reshape
-        shocks = (z @ chol_log.T).reshape(n_years, n_sims, A)
+        # Stress magnitude: 2-5% range for standard
+        if tail_magnitude == "standard":
+            stress_base = 0.03  # 3% base stress magnitude
+        else:  # extreme
+            stress_base = 0.04  # 4% base (1.33x standard, not 1.6x)
         
-        # Start with log returns = drift + diffusion
-        logr = mu_log.reshape(1, 1, A) + shocks
+        # Apply stress events with calibrated skew
+        stress_events = rng.random((n_years, n_sims)) < stress_prob
+        n_stress = int(stress_events.sum())
         
-        # 2) Jump parameters in LOG space (safer)
-        jump_params = {
-            "stocks": {"lam": 0.40, "p_pos": 0.35, "eta_pos": 0.05, "eta_neg": 0.09},
-            "bonds":  {"lam": 0.05, "p_pos": 0.50, "eta_pos": 0.01, "eta_neg": 0.02},
-            "crypto": {"lam": 1.20, "p_pos": 0.40, "eta_pos": 0.18, "eta_neg": 0.22},
-            "cds":    {"lam": 0.00, "p_pos": 0.50, "eta_pos": 0.00, "eta_neg": 0.00},
-            "cash":   {"lam": 0.00, "p_pos": 0.50, "eta_pos": 0.00, "eta_neg": 0.00},
-        }
-        
-        # Market jump parameters (Bernoulli to prevent multiple crashes per year)
-        market_lam = 0.30
-        market_p_pos = 0.35
-        market_eta_pos = 0.04
-        market_eta_neg = 0.08
-        bond_beta = 0.10
-        
-        # Safety parameters
-        min_annual_return = -0.70 if tail_magnitude == "standard" else -0.80
-        max_idio_jumps_per_year = 2
-        
-        # Apply magnitude/frequency/skew adjustments
-        mag_mult = 1.6 if tail_magnitude == "extreme" else 1.0
-        freq_mult = 2.0 if tail_frequency == "high" else 1.0
-        skew_shift = {"negative": -0.10, "neutral": 0.0, "positive": 0.10}[tail_skew]
-        
-        # Adjust parameters
-        for asset in jump_params:
-            jump_params[asset]["lam"] *= freq_mult
-            jump_params[asset]["p_pos"] = float(np.clip(jump_params[asset]["p_pos"] + skew_shift, 0.05, 0.95))
-            jump_params[asset]["eta_pos"] *= mag_mult
-            jump_params[asset]["eta_neg"] *= mag_mult
-        
-        market_lam *= freq_mult
-        market_p_pos = float(np.clip(market_p_pos + skew_shift, 0.05, 0.95))
-        market_eta_pos *= mag_mult
-        market_eta_neg *= mag_mult
-        
-        # Helper: draw jump sizes in log space
-        def draw_jump_sizes_log(n, p_pos, eta_pos, eta_neg):
-            if n <= 0:
-                return np.empty(0)
-            u = rng.random(n)
-            pos = u < p_pos
-            out = np.empty(n)
-            if pos.any():
-                out[pos] = rng.exponential(scale=max(1e-12, eta_pos), size=pos.sum())
-            if (~pos).any():
-                out[~pos] = -rng.exponential(scale=max(1e-12, eta_neg), size=(~pos).sum())
-            return out
-        
-        # 3) Market jump: Bernoulli (at most 1 per year to prevent pileups)
-        if market_lam > 0:
-            p_event = 1.0 - np.exp(-market_lam)  # Bernoulli probability
-            M = rng.random((n_years, n_sims)) < p_event
-            n_events = int(M.sum())
-            if n_events > 0:
-                m_sizes = draw_jump_sizes_log(n_events, market_p_pos, market_eta_pos, market_eta_neg)
-                m_full = np.zeros((n_years, n_sims))
-                m_full[M] = m_sizes
-                
-                # Apply to affected assets
-                for i, asset in enumerate(assets):
-                    if asset in ["stocks", "crypto"]:
-                        logr[:, :, i] += m_full
-                    elif asset == "bonds" and bond_beta != 0:
-                        logr[:, :, i] += bond_beta * m_full
-        
-        # 4) Idiosyncratic jumps with cap to prevent pileups
-        for i, asset in enumerate(assets):
-            if asset not in jump_params:
-                continue
-            params = jump_params[asset]
-            if params["lam"] <= 0:
-                continue
+        if n_stress > 0:
+            # Gentle skew adjustments (±5%, not ±10%)
+            if tail_skew == "negative":
+                p_up = 0.40  # 40% up, 60% down (gentle negative skew)
+            elif tail_skew == "positive":
+                p_up = 0.60  # 60% up, 40% down (gentle positive skew)
+            else:  # neutral
+                p_up = 0.45  # 45% up, 55% down (slight negative bias is realistic)
             
-            # Draw Poisson then cap at max jumps per year
-            counts = np.minimum(
-                rng.poisson(params["lam"], size=YS),
-                max_idio_jumps_per_year
-            )
-            total = int(counts.sum())
-            if total > 0:
-                sizes = draw_jump_sizes_log(total, params["p_pos"], params["eta_pos"], params["eta_neg"])
-                bins = np.bincount(np.repeat(np.arange(YS), counts), weights=sizes, minlength=YS)
-                logr[:, :, i] += bins.reshape(n_years, n_sims)
+            # Draw stress directions
+            stress_directions = rng.random(n_stress) < p_up
+            
+            # Vary stress magnitude slightly for realism (2-5% range)
+            stress_magnitudes = stress_base + rng.normal(0, 0.01, n_stress)  # ±1% variation
+            stress_magnitudes = np.clip(stress_magnitudes, 0.02, 0.05)  # Keep in 2-5% range
+            
+            # Apply direction
+            stress_sizes = np.where(stress_directions, stress_magnitudes, -stress_magnitudes)
+            
+            # Create stress adjustment matrix
+            stress_adjustments = np.zeros((n_years, n_sims))
+            stress_adjustments[stress_events] = stress_sizes
+            
+            # Apply to assets with realistic correlations
+            for i, asset in enumerate(assets):
+                if asset == "stocks":
+                    rets[:, :, i] += stress_adjustments  # Full impact on stocks
+                elif asset == "crypto":
+                    rets[:, :, i] += 1.5 * stress_adjustments  # 150% impact on crypto
+                elif asset == "bonds":
+                    # Bonds: flight-to-quality (negative correlation in stress)
+                    rets[:, :, i] -= 0.2 * stress_adjustments  # 20% opposite movement
         
-        # 5) Convert to arithmetic returns with hard floor
-        r = np.expm1(logr)  # exp(logr) - 1, guarantees r > -1
+        # 3) Mean correction to preserve expected returns
+        # Calculate actual mean after stress events
+        if n_stress > 0:
+            for i, asset in enumerate(assets):
+                actual_mean = np.mean(rets[:, :, i])
+                target_mean = mu[i]
+                # Add small drift correction to preserve expected return
+                drift_correction = (target_mean - actual_mean) * 0.5  # Partial correction
+                rets[:, :, i] += drift_correction
         
-        # Apply annual floor (e.g., -70% standard, -80% extreme)
-        np.maximum(r, min_annual_return, out=r)
-        
-        # Also apply reasonable ceilings to prevent outliers
+        # 4) Apply realistic annual return bounds (calibrated to history)
         for i, asset in enumerate(assets):
             if asset == "crypto":
-                np.minimum(r[:, :, i], 3.00, out=r[:, :, i])
+                # Crypto: can be extreme but not infinite
+                rets[:, :, i] = np.clip(rets[:, :, i], -0.85, 3.00)
             elif asset == "stocks":
-                np.minimum(r[:, :, i], 1.00, out=r[:, :, i])
+                # Stocks: historical bounds with fat-tail allowance
+                if tail_magnitude == "extreme":
+                    rets[:, :, i] = np.clip(rets[:, :, i], -0.70, 1.00)  # Extreme: -70% floor
+                else:
+                    rets[:, :, i] = np.clip(rets[:, :, i], -0.60, 0.80)  # Standard: -60% floor
             elif asset == "bonds":
-                np.minimum(r[:, :, i], 0.40, out=r[:, :, i])
-            else:  # CDs and cash
-                np.minimum(r[:, :, i], 0.15, out=r[:, :, i])
+                # Bonds: tighter bounds
+                rets[:, :, i] = np.clip(rets[:, :, i], -0.25, 0.35)
+            elif asset == "cds":
+                # CDs: minimal volatility
+                rets[:, :, i] = np.clip(rets[:, :, i], -0.05, 0.10)
+            else:  # cash
+                # Cash: nearly risk-free
+                rets[:, :, i] = np.clip(rets[:, :, i], -0.02, 0.08)
         
-        return r
+        return rets
 
     def _account_allocation_vector(self) -> np.ndarray:
         # Weighted allocation across all accounts by balance
@@ -410,17 +380,22 @@ class Engine:
             # 1. Start with previous balance plus any lump sums
             start_balance = balances[yi-1, :] + lump
             
-            # 2. Apply half year's growth
+            # 2. Apply Black Swan event if configured (BEFORE growth)
+            if self.sc.black_swan.enabled and age == self.sc.black_swan.age:
+                # Apply the portfolio drop to all simulations at this age
+                start_balance = start_balance * (1.0 - self.sc.black_swan.portfolio_drop)
+            
+            # 3. Apply half year's growth
             half_year_return = port_rets[yi-1, :] / 2.0
             mid_year_balance = start_balance * (1.0 + half_year_return)
             
-            # 3. Apply withdrawals and toy purchases at mid-year
+            # 4. Apply withdrawals and toy purchases at mid-year
             after_withdrawal = mid_year_balance - toys - net_wd_after_tax
             
-            # 4. Apply remaining half year's growth
+            # 5. Apply remaining half year's growth
             end_balance = after_withdrawal * (1.0 + half_year_return)
             
-            # 5. Ensure non-negative balance
+            # 6. Ensure non-negative balance
             balances[yi, :] = np.maximum(end_balance, 0.0)
 
         # Summaries
