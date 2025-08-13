@@ -37,6 +37,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+temp_tests/
 
 # Distribution
 dist/
