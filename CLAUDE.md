@@ -83,11 +83,85 @@ The frontend is a single JSX file designed to run in a React environment with:
   - See `docs/kou_logsafe_test_results.md` for full test results
 - Database file `retire.db` is stored in the `data/` directory at the project root
 
-## Testing Fat-Tail Implementations
+## Service Management
 
-Run the comprehensive comparison test:
+Three scripts are provided for managing the API and frontend services:
+
 ```bash
-uv run python temp_tests/compare_fat_tail_engines.py
+# Check status and auto-start if needed
+./check_services.sh
+
+# Stop all services
+./stop_services.sh  
+
+# Full restart
+./restart_services.sh
 ```
 
-This will test all three engines (kou_logsafe, research, current) and show which achieves the target 2-5% impact.
+Services run on:
+- **API**: http://localhost:8020 (docs at /docs)
+- **Frontend**: http://localhost:5177
+
+## Testing
+
+### Fat-Tail Algorithm Tests
+The project includes comprehensive test suite for the Kou Log-Safe fat-tail algorithm:
+
+```bash
+# Run all tests
+uv run pytest tests/ -v
+
+# Run specific test categories
+uv run pytest tests/test_fat_tail_impacts.py -v  # Portfolio impact tests
+uv run pytest tests/test_parameter_bounds.py -v  # Parameter validation
+uv run pytest tests/test_toggle_behavior.py -v   # Toggle determinism
+uv run pytest tests/test_annual_distributions.py -v  # Distribution tests
+```
+
+### CI/CD Pipeline
+GitHub Actions workflow (`.github/workflows/test_fat_tails.yml`) runs on every push and weekly to:
+- Test across Python 3.9, 3.10, 3.11
+- Verify parameter stability
+- Check performance benchmarks (<1.0s for 10,000 simulations)
+- Ensure portfolio impacts stay within guardrails
+
+## Recent Updates (2025-08-13)
+
+### Fat-Tail Algorithm Optimization
+- **Implemented Kou Log-Safe algorithm** via fractional factorial optimization
+- **Achieved target impacts**: Standard -2.9%, Extreme -4.5%, High Frequency -3.9%
+- **Added Black Swan coordination** to prevent double-counting extreme events
+- **Created comprehensive test suite** with 38 tests and CI guardrails
+- **Parameter version control** in `params/kou_params_v1.json`
+
+### Frontend Improvements
+- **Dynamic age breakdown table**: Now starts at first 5-year multiple after user's current age
+- Previously hardcoded to [70, 75, 80, 85, 90], now dynamically calculated
+
+### Project Structure
+- Modularized Monte Carlo engine into `src/backend/monte_carlo/` package
+- Separated models, database, and config from main.py
+- Added test infrastructure in `tests/` directory
+- Created parameter versioning in `params/` directory
+
+## Known Configuration
+
+### Dependencies (requirements.txt)
+- fastapi, uvicorn, numpy, pydantic, SQLAlchemy
+- scipy, tabulate (for optimization)
+- pytest, pytest-cov (for testing)
+
+### Frontend (package.json expected):
+```bash
+cd frontend
+npm install  # Install dependencies
+npm run dev  # Start development server
+```
+
+## Important Notes
+
+- **Always use `uv` for Python package management** (not pip directly)
+- **Fat-tail impact target**: 2-5% reduction in portfolio success rate
+- **Default simulation count**: 10,000 (configurable via n_simulations)
+- **Database location**: `data/retire.db` (SQLite)
+- **Test coverage requirement**: Minimum 90% for monte_carlo package
