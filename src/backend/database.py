@@ -1,10 +1,17 @@
 """
 Database configuration and models for the retirement calculator.
+Now with optional encryption support for sensitive data.
 """
 
 from pathlib import Path
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.orm import declarative_base, Session
+
+# Handle both relative and absolute imports
+try:
+    from .encrypted_database import get_encryption_manager, EncryptedScenarioRow
+except ImportError:
+    from encrypted_database import get_encryption_manager, EncryptedScenarioRow
 
 # Create data directory path relative to project root
 DATA_DIR = Path(__file__).parent.parent.parent / "data"

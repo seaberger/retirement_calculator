@@ -3,6 +3,8 @@ uvicorn
 numpy
 pydantic
 SQLAlchemy
+cryptography
+python-dotenv
 tabulate
 scipy
 pytest

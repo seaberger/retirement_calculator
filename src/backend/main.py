@@ -17,6 +17,7 @@ try:
         CORS_ORIGINS, CORS_CREDENTIALS, CORS_METHODS, CORS_HEADERS
     )
     from .database import engine, ScenarioRow, get_session
+    from .encrypted_database import get_encryption_manager, EncryptedScenarioRow
     from .models import (
         Scenario, Account, ConsultingLadder, Spending, 
         IncomeStream, LumpEvent, ToyPurchase
@@ -29,6 +30,7 @@ except ImportError:
         CORS_ORIGINS, CORS_CREDENTIALS, CORS_METHODS, CORS_HEADERS
     )
     from database import engine, ScenarioRow, get_session
+    from encrypted_database import get_encryption_manager, EncryptedScenarioRow
     from models import (
         Scenario, Account, ConsultingLadder, Spending, 
         IncomeStream, LumpEvent, ToyPurchase
@@ -138,24 +140,31 @@ def list_scenarios():
 @app.get("/api/scenarios/{sid}")
 def get_scenario(sid: int):
     """Get a specific saved scenario by ID."""
+    enc_manager = get_encryption_manager()
     with get_session() as s:
         row = s.get(ScenarioRow, sid)
         if not row:
             raise HTTPException(404, "Scenario not found")
-        return json.loads(row.payload)
+        # Decrypt the payload
+        encrypted_row = EncryptedScenarioRow(row, enc_manager)
+        return json.loads(encrypted_row.payload)
 
 
 @app.post("/api/scenarios")
 def save_scenario(scenario: Scenario):
     """Save or update a scenario."""
+    enc_manager = get_encryption_manager()
     with get_session() as s:
         # Upsert by name
         row = s.query(ScenarioRow).filter_by(name=scenario.name).first()
         if row is None:
-            row = ScenarioRow(name=scenario.name, payload=scenario.model_dump_json())
+            row = ScenarioRow(name=scenario.name)
+            encrypted_row = EncryptedScenarioRow(row, enc_manager)
+            encrypted_row.payload = scenario.model_dump_json()  # This will be encrypted
             s.add(row)
         else:
-            row.payload = scenario.model_dump_json()
+            encrypted_row = EncryptedScenarioRow(row, enc_manager)
+            encrypted_row.payload = scenario.model_dump_json()  # This will be encrypted
         s.commit()
         return {"id": row.id, "name": row.name}
 

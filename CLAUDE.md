@@ -82,6 +82,9 @@ The frontend is a single JSX file designed to run in a React environment with:
   - Calibrated to achieve 2-5% reduction in success rates (industry standard)
   - See `docs/kou_logsafe_test_results.md` for full test results
 - Database file `retire.db` is stored in the `data/` directory at the project root
+- **Database Encryption**: All scenario data is encrypted using Fernet (AES-256)
+- Encryption key is stored in `.env` file (never commit this!)
+- Transparent encryption/decryption via `encrypted_database.py` module
 
 ## Service Management
 
@@ -126,6 +129,12 @@ GitHub Actions workflow (`.github/workflows/test_fat_tails.yml`) runs on every p
 - Ensure portfolio impacts stay within guardrails
 
 ## Recent Updates (2025-08-13)
+
+### Database Encryption Implementation
+- **Implemented Fernet encryption** for all sensitive financial data
+- **Transparent encryption/decryption** - works seamlessly with existing code
+- **Portable solution** - uses pure Python cryptography library (no system dependencies)
+- **Environment-based configuration** - encryption key in `.env` file
 
 ### Fat-Tail Algorithm Optimization
 - **Implemented Kou Log-Safe algorithm** via fractional factorial optimization

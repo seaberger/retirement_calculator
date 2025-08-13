@@ -1,45 +1,44 @@
 # Retirement Monte Carlo Simulator
 
-A full‑stack financial simulation tool for retirement planning, built with **FastAPI** (backend) and **React** (frontend). This platform models multiple account types, asset allocations, consulting income, lump sums, and discretionary purchases — running 10,000 Monte Carlo simulations with fat‑tail events for realistic risk assessment.
+A sophisticated financial simulation tool for retirement planning with **encrypted data storage**, built with **FastAPI** (backend) and **React** (frontend). This platform models multiple account types, asset allocations, income streams, and spending patterns — running 10,000 Monte Carlo simulations with industry-leading fat‑tail modeling for realistic risk assessment.
 
-## Features
-- **Multi‑account portfolio modeling** — 401k, IRA, taxable, cash, crypto, CDs with custom allocations.
-- **Correlated Monte Carlo engine** — Student‑t distribution, fat‑tail shocks, correlation matrix.
-- **Custom events** — consulting income ladders, lump sums, Social Security, toy purchases.
-- **Taxes and spending** — effective‑rate tax model, inflation, reduced spending after target age.
-- **Interactive UI** — edit inputs, run simulations, view percentile bands, save scenarios to SQLite.
-- **Data persistence** — scenarios saved/loaded from local SQLite database.
+## ✨ Features
+- 🎲 **Advanced Monte Carlo Engine** — Kou Log-Safe algorithm with calibrated fat-tail events (2-5% impact)
+- 🔐 **Encrypted Data Storage** — AES-256 encryption for all financial data
+- 📊 **Multi‑account portfolio modeling** — 401k, IRA, taxable, crypto, CDs with custom allocations
+- 💰 **Comprehensive income modeling** — Social Security, pensions, consulting ladders
+- 📈 **Realistic market dynamics** — Correlated returns, sequence risk, Black Swan coordination
+- 🎯 **Interactive visualization** — Real-time portfolio paths with percentile bands
+- 💾 **Persistent scenarios** — Encrypted SQLite database with transparent encryption/decryption
 
 ## Requirements
 - **Backend**: Python 3.9+
 - **Frontend**: Node.js 18+
 - **Package Manager**: [uv](https://github.com/astral-sh/uv)
 
-## Installation & Setup
-### Backend (using uv)
+## 🚀 Quick Start
+
 ```bash
-# Create virtual environment
-uv venv .venv
+# Clone the repository
+git clone https://github.com/seaberger/retirement_calculator.git
+cd retirement_calculator
 
 # Install dependencies
 uv pip install -r requirements.txt
+cd frontend && npm install && cd ..
 
-# Run the backend server
-cd src/backend
-uv run uvicorn main:app --reload --port 8020
-```
-Backend runs on http://localhost:8020.
+# Start both services
+./check_services.sh
 
-### Frontend
-Use the provided `App.jsx` in a Vite React project, or run directly in the ChatGPT Canvas preview.
-```bash
-npm create vite@latest frontend -- --template react
-cd frontend
-npm install
-# Replace src/App.jsx with provided App.jsx
-npm run dev
+# Open browser to
+http://localhost:5177
 ```
-Frontend runs on http://localhost:5173 by default and connects to backend at http://localhost:8020.
+
+## 📖 Documentation
+
+- **[User Manual](docs/USER_MANUAL.md)** — Complete guide for using the application
+- **[Developer Guide](CLAUDE.md)** — Technical documentation for development
+- **[API Docs](http://localhost:8020/docs)** — Interactive API documentation (when running)
 
 ## Screenshots
 
@@ -60,24 +59,45 @@ Frontend runs on http://localhost:5173 by default and connects to backend at htt
 - Market return analysis across percentiles
 - Success probability metrics
 
-## Usage
-1. Start backend and frontend.
-2. Open frontend in your browser.
-3. Adjust inputs: accounts, incomes, lump sums, consulting ladder, toy purchases.
-4. Click **Show Me** to generate projections.
-5. View median, 20th, and 80th percentile paths with band chart.
-6. Save/Load scenarios using the buttons in the Personal tab.
+## 🔐 Security
 
-## File Structure
+Your financial data is protected with:
+- **AES-256 encryption** for all scenario data
+- **PBKDF2 key derivation** with 100,000 iterations
+- **Environment-based key management** via `.env` file
+- **Transparent encryption/decryption** during use
+
+⚠️ **Important**: Keep your `.env` file secure and never commit it to version control!
+
+## Service Management
+
+```bash
+# Start services (auto-starts if not running)
+./check_services.sh
+
+# Stop all services
+./stop_services.sh
+
+# Restart services
+./restart_services.sh
 ```
-backend/
-  main.py               # FastAPI backend & simulation engine
-  requirements.txt      # Python dependencies
-frontend/
-  src/App.jsx           # React UI
+
+## Project Structure
+```
+retirement_calculator/
+├── src/
+│   ├── backend/          # FastAPI server + Monte Carlo engine
+│   │   ├── monte_carlo/  # Simulation engine with fat-tail models
+│   │   └── encrypted_database.py  # Encryption layer
+│   └── frontend/         # React application
+├── tests/                # Comprehensive test suite
+├── docs/                 # Documentation
+│   └── USER_MANUAL.md    # Complete user guide
+├── params/               # Calibrated parameters
+└── data/                 # Encrypted SQLite database
 ```
 
 ## License
-MIT License — free to modify and use.
+Private repository — all rights reserved
 
 
